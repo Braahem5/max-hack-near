@@ -57,6 +57,23 @@ checks:
     timeoutMs: 5000
     repeatable: true
 
+
+  - id: "service-form"
+    name: "Описание формы услуги"
+    description: "Шаги, поля и политика видимости каждого поля для помощника"
+    method: "GET"
+    path: "/api/v1/services/{code}"
+    role: "user"
+    request:
+      path:
+        code: "housing_compensation"
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      requiredFields: ["code", "title", "steps"]
+    timeoutMs: 5000
+    repeatable: true
+
   - id: "start-application"
     name: "Начать заявление на компенсацию ЖКУ"
     description: "Если черновик этой услуги уже есть, возвращается он с кодом 200"
@@ -99,12 +116,33 @@ checks:
     timeoutMs: 5000
     repeatable: true
 
+
+  - id: "next-step"
+    name: "Перейти к следующему шагу"
+    method: "POST"
+    path: "/api/v1/service-sessions/{session_id}/navigation"
+    role: "user"
+    dependsOn: ["fill-step"]
+    request:
+      path:
+        session_id: "${applicationId}"
+      headers:
+        Content-Type: "application/json"
+      body:
+        action: "next"
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      requiredFields: ["id", "current_step", "steps"]
+    timeoutMs: 5000
+    repeatable: false
+
   - id: "read-application"
     name: "Прочитать заявление"
     method: "GET"
     path: "/api/v1/service-sessions/{session_id}"
     role: "user"
-    dependsOn: ["fill-step"]
+    dependsOn: ["next-step"]
     request:
       path:
         session_id: "${applicationId}"
@@ -163,7 +201,137 @@ checks:
     timeoutMs: 5000
     repeatable: true
 
+
+  - id: "invite-helper"
+    name: "Пригласить помощника по ссылке"
+    description: "Ссылка открывает mini app в MAX; подключение потом подтверждает владелец"
+    method: "POST"
+    path: "/api/v1/assist-sessions/{assist_id}/invites"
+    role: "user"
+    dependsOn: ["start-help"]
+    request:
+      path:
+        assist_id: "${assistId}"
+      headers:
+        Content-Type: "application/json"
+      body:
+        kind: "link"
+    expected:
+      statusCodes: [201]
+      contentType: "application/json"
+      requiredFields: ["id", "token", "deep_link", "expires_at"]
+    timeoutMs: 5000
+    repeatable: false
+    extract:
+      inviteId: "$.id"
+
+  - id: "call-mfc"
+    name: "Позвать сотрудника МФЦ"
+    description: "Обращение встаёт в очередь МФЦ, в ответе — место в очереди"
+    method: "POST"
+    path: "/api/v1/assist-sessions/{assist_id}/operator-requests"
+    role: "user"
+    dependsOn: ["start-help"]
+    request:
+      path:
+        assist_id: "${assistId}"
+      headers:
+        Content-Type: "application/json"
+      body:
+        topic: "dont_understand"
+    expected:
+      statusCodes: [201]
+      contentType: "application/json"
+      requiredFields: ["id", "status", "topic", "position"]
+    timeoutMs: 5000
+    repeatable: false
+
+  - id: "past-help"
+    name: "Подсказки «Как вы решали это раньше»"
+    method: "GET"
+    path: "/api/v1/service-sessions/{service_session_id}/past-help"
+    role: "user"
+    dependsOn: ["start-application"]
+    request:
+      path:
+        service_session_id: "${applicationId}"
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      requiredFields: ["steps"]
+    timeoutMs: 5000
+    repeatable: true
+
+  - id: "consultations"
+    name: "История помощи"
+    method: "GET"
+    path: "/api/v1/consultations"
+    role: "user"
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      bodySchema:
+        type: "array"
+    timeoutMs: 5000
+    repeatable: true
+
+  - id: "add-close-person"
+    name: "Добавить близкого по ссылке"
+    description: "Одноразовая ссылка или QR-код; добавление потом подтверждает владелец"
+    method: "POST"
+    path: "/api/v1/pairings"
+    role: "user"
+    request:
+      headers:
+        Content-Type: "application/json"
+      body:
+        method: "link"
+    expected:
+      statusCodes: [201]
+      contentType: "application/json"
+      requiredFields: ["id", "status", "token", "deep_link", "expires_at"]
+    timeoutMs: 5000
+    repeatable: false
+    extract:
+      pairingId: "$.id"
+
+  - id: "close-people"
+    name: "Список близких"
+    method: "GET"
+    path: "/api/v1/trusted-helpers"
+    role: "user"
+    expected:
+      statusCodes: [200]
+      contentType: "application/json"
+      bodySchema:
+        type: "array"
+    timeoutMs: 5000
+    repeatable: true
+
 cleanup:
+  - id: "revoke-invite"
+    method: "DELETE"
+    path: "/api/v1/assist-sessions/{assist_id}/invites/{invite_id}"
+    role: "user"
+    request:
+      path:
+        assist_id: "${assistId}"
+        invite_id: "${inviteId}"
+    expected:
+      statusCodes: [204, 404, 409]
+    timeoutMs: 5000
+
+  - id: "cancel-mfc-request"
+    method: "DELETE"
+    path: "/api/v1/assist-sessions/{assist_id}/operator-requests/current"
+    role: "user"
+    request:
+      path:
+        assist_id: "${assistId}"
+    expected:
+      statusCodes: [204, 404, 409]
+    timeoutMs: 5000
+
   - id: "end-help"
     method: "POST"
     path: "/api/v1/assist-sessions/{assist_id}/end"
@@ -184,4 +352,15 @@ cleanup:
         session_id: "${applicationId}"
     expected:
       statusCodes: [204, 404]
+    timeoutMs: 5000
+
+  - id: "cancel-close-person"
+    method: "DELETE"
+    path: "/api/v1/pairings/{pairing_id}"
+    role: "user"
+    request:
+      path:
+        pairing_id: "${pairingId}"
+    expected:
+      statusCodes: [204, 404, 409]
     timeoutMs: 5000
