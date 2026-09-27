@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ConsultationReplay } from '../api/client';
 import { queryKeys, recordingQuery, replayQuery } from '../api/queries';
 import { ScreenIntro } from '../components/ScreenIntro';
-import { AppIcon, Surface } from '../components/UiPrimitives';
+import { AppIcon, LoadingMessage, Surface } from '../components/UiPrimitives';
 
 type ReplayStep = ConsultationReplay['steps'][number];
 
@@ -202,7 +202,7 @@ export function R3Replay({ id }: { id: string }) {
     }));
   }, [data]);
 
-  if (replay.isLoading) return <Typography.Text>Готовим replay…</Typography.Text>;
+  if (replay.isLoading) return <LoadingMessage>Готовим replay…</LoadingMessage>;
   if (replay.error || !data || !state) {
     return <div className="notice notice--error">{replay.error instanceof Error ? replay.error.message : 'Не удалось загрузить replay'}</div>;
   }
@@ -264,7 +264,7 @@ export function R3Replay({ id }: { id: string }) {
             <button type="button" className="replay-speed" onClick={cycleSpeed}>{speed}×</button>
           </div>
         </Surface>
-      ) : <Surface tone="warning"><Typography.Text>{recordingMessage}</Typography.Text></Surface>}
+      ) : <Surface tone="warning">{recording.isLoading ? <LoadingMessage>{recordingMessage}</LoadingMessage> : <Typography.Text>{recordingMessage}</Typography.Text>}</Surface>}
 
       {state.step && <>
         <div className="projection-caption">Что было на экране в {seconds(position)}</div>

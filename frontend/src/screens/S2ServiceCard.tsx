@@ -6,10 +6,11 @@ import { AppIcon, Surface } from '../components/UiPrimitives';
 interface S2ServiceCardProps {
   service: ServiceDefinition;
   draft?: ServiceSession;
+  busy?: boolean;
   onStart: () => void;
 }
 
-export function S2ServiceCard({ service, draft, onStart }: S2ServiceCardProps) {
+export function S2ServiceCard({ service, draft, busy = false, onStart }: S2ServiceCardProps) {
   return (
     <div className="ui-page service-card-screen">
       <ScreenIntro eyebrow="Социальная поддержка" title={service.title} />
@@ -20,7 +21,7 @@ export function S2ServiceCard({ service, draft, onStart }: S2ServiceCardProps) {
       <Surface tone="blue" className="service-help-card"><AppIcon name="people" /><div><h2>Можно заполнить вместе</h2><p>Близкий, сотрудник МФЦ или цифровой сотрудник подскажут голосом и покажут, куда нажать. Личные данные они не увидят.</p></div></Surface>
       {draft && <Surface tone="green"><strong>Ваш черновик</strong><p>Сохранён на шаге «{draft.current_step.title}»</p></Surface>}
       {service.disclaimer && <p className="ui-caption">{service.disclaimer}</p>}
-      <div className="screen-cta"><Button size="small" stretched onClick={onStart}>{draft ? 'Продолжить оформление' : 'Начать заполнение'}</Button></div>
+      <div className="screen-cta"><Button size="small" stretched loading={busy} disabled={busy} onClick={onStart}>{draft ? 'Продолжить оформление' : 'Начать заполнение'}</Button></div>
     </div>
   );
 }

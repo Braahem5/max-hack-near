@@ -9,12 +9,14 @@ interface S5WaitingProps {
   session: AssistSession;
   connection: string;
   operatorRequest?: { status: string; position: number | null } | null;
+  sharing?: boolean;
+  ending?: boolean;
   onShareAgain: () => void;
   onContinue: () => void;
   onEnd: () => void;
 }
 
-export function S5Waiting({ session, connection, operatorRequest, onShareAgain, onContinue, onEnd }: S5WaitingProps) {
+export function S5Waiting({ session, connection, operatorRequest, sharing = false, ending = false, onShareAgain, onContinue, onEnd }: S5WaitingProps) {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const waitingForOperator = operatorRequest?.status === 'queued';
   return (
@@ -22,11 +24,11 @@ export function S5Waiting({ session, connection, operatorRequest, onShareAgain, 
       <Surface><StatusScreen icon={waitingForOperator ? 'headset' : 'link'} title={waitingForOperator ? 'Ждём специалиста' : 'Приглашение отправлено'} description={waitingForOperator ? 'Обращение передано в очередь МФЦ. Специалист подключится, когда освободится.' : 'Когда близкий подключится, вы услышите его голос и сможете подтвердить вход.'}><div className="status-meta"><StatusMark tone={connection === 'reconnecting' ? 'attention' : 'positive'} /><span>{connection === 'reconnecting' ? 'Соединение восстанавливается' : waitingForOperator ? `Вы в очереди${operatorRequest?.position ? `: ${operatorRequest.position}` : ''}` : 'Приглашение активно'}</span></div></StatusScreen></Surface>
       <Surface tone="blue" className="with-icon"><AppIcon name="info" /><p>Пока ждёте, можно продолжать заполнять — черновик сохраняется сам.</p></Surface>
       <div className="screen-actions">
-        {!waitingForOperator && <Button size="small" stretched onClick={onShareAgain}><AppIcon name="link" />Отправить ссылку ещё раз</Button>}
+        {!waitingForOperator && <Button size="small" stretched loading={sharing} disabled={sharing} onClick={onShareAgain}><AppIcon name="link" />Отправить ссылку ещё раз</Button>}
         <Button size="small" stretched variant="secondary" onClick={onContinue}>Вернуться к заявлению</Button>
         <Button size="small" stretched variant="destructive" onClick={() => setConfirmEnd(true)}>Отменить ожидание</Button>
       </div>
-      {confirmEnd && <ConfirmDialog title="Отменить ожидание?" description="Помощник больше не сможет подключиться по этой ссылке." confirmLabel="Отменить" destructive onCancel={() => setConfirmEnd(false)} onConfirm={onEnd} />}
+      {confirmEnd && <ConfirmDialog title="Отменить ожидание?" description="Помощник больше не сможет подключиться по этой ссылке." confirmLabel="Отменить" destructive pending={ending} onCancel={() => setConfirmEnd(false)} onConfirm={onEnd} />}
     </div>
   );
 }

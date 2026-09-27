@@ -35,12 +35,18 @@ export function H3Helper({ snapshot, connection, onLeave }: { snapshot: Projecte
 
   function point(elementId: string, event: PointerEvent<HTMLElement>) {
     if (kind !== 'pointer' || !sendCommand || Date.now() - lastPointerAt.current < 100) return;
-    const rect = event.currentTarget.getBoundingClientRect();
+    const selectOptions = event.currentTarget.querySelector<HTMLElement>('.synced-select__options');
+    const optionsRect = selectOptions?.getBoundingClientRect();
+    const overSelectOptions = optionsRect !== undefined
+      && event.clientX >= optionsRect.left && event.clientX <= optionsRect.right
+      && event.clientY >= optionsRect.top && event.clientY <= optionsRect.bottom;
+    const rect = overSelectOptions && optionsRect ? optionsRect : event.currentTarget.getBoundingClientRect();
     lastPointerAt.current = Date.now();
     sendCommand('annotation.pointer', {
       element_id: elementId,
       rel_x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       rel_y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+      ...(overSelectOptions ? { target_area: 'select_options' } : {}),
     });
   }
 

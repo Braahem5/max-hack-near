@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
+import { Spinner } from '@maxhub/max-ui';
 
 export type AppIconName =
   | 'arrow' | 'arrow-right' | 'back' | 'check' | 'chevron' | 'circle' | 'clock' | 'document'
@@ -47,6 +48,10 @@ export function AppInput({ className = '', ...props }: InputHTMLAttributes<HTMLI
   return <input className={`app-input ${className}`.trim()} {...props} />;
 }
 
+export function LoadingMessage({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`loading-message ${className}`.trim()} role="status"><Spinner size={20} appearance="themed" /><span>{children}</span></div>;
+}
+
 export function Surface({ children, className = '', tone = 'default' }: { children: ReactNode; className?: string; tone?: 'default' | 'blue' | 'green' | 'warning' }) {
   return <section className={`ui-surface ui-surface--${tone} ${className}`.trim()}>{children}</section>;
 }
@@ -76,8 +81,8 @@ export function SegmentedControl<T extends string>({ value, options, onChange }:
   return <div className="ui-segmented" role="tablist">{options.map((option) => <button key={option.value} type="button" role="tab" aria-selected={value === option.value} className={value === option.value ? 'is-active' : ''} onClick={() => onChange(option.value)}>{option.label}</button>)}</div>;
 }
 
-export function ListRow({ icon, iconTone = 'blue', title, subtitle, trailing, onClick, className = '', disabled = false }: { icon?: AppIconName; iconTone?: 'blue' | 'green' | 'orange' | 'purple'; title: ReactNode; subtitle?: ReactNode; trailing?: ReactNode; onClick?: () => void; className?: string; disabled?: boolean }) {
-  const content = <>{icon && <span className={`ui-tile ui-tile--${iconTone}`}><AppIcon name={icon} /></span>}<span className="ui-list-row__copy"><strong>{title}</strong>{subtitle && <span>{subtitle}</span>}</span>{trailing ?? (onClick ? <AppIcon name="chevron" className="ui-list-row__chevron" /> : null)}</>;
+export function ListRow({ icon, iconTone = 'blue', title, subtitle, trailing, onClick, className = '', disabled = false, loading = false }: { icon?: AppIconName; iconTone?: 'blue' | 'green' | 'orange' | 'purple'; title: ReactNode; subtitle?: ReactNode; trailing?: ReactNode; onClick?: () => void; className?: string; disabled?: boolean; loading?: boolean }) {
+  const content = <>{icon && <span className={`ui-tile ui-tile--${iconTone}`}><AppIcon name={icon} /></span>}<span className="ui-list-row__copy"><strong>{title}</strong>{subtitle && <span>{subtitle}</span>}</span>{trailing ?? (loading ? <Spinner size={20} appearance="themed" /> : onClick ? <AppIcon name="chevron" className="ui-list-row__chevron" /> : null)}</>;
   if (onClick) return <button type="button" className={`ui-list-row ${className}`.trim()} disabled={disabled} onClick={onClick}>{content}</button>;
   return <div className={`ui-list-row ${className}`.trim()}>{content}</div>;
 }
@@ -86,13 +91,14 @@ export function IconButton({ label, icon, tone = 'default', ...props }: { label:
   return <button type="button" className={`ui-icon-button ui-icon-button--${tone}`} aria-label={label} title={label} {...props}><AppIcon name={icon} /></button>;
 }
 
-export function BottomNav({ active, onHome, onServices, onHistory, onHelpers }: { active: 'home' | 'services' | 'history' | 'helpers'; onHome: () => void; onServices: () => void; onHistory: () => void; onHelpers: () => void }) {
-  const items: Array<{ id: typeof active; label: string; icon: AppIconName; action: () => void }> = [
+export function BottomNav({ active, onHome, onServices, onHistory, onHelpers, staffMode = false }: { active: 'home' | 'services' | 'history' | 'helpers'; onHome: () => void; onServices: () => void; onHistory: () => void; onHelpers: () => void; staffMode?: boolean }) {
+  const allItems: Array<{ id: typeof active; label: string; icon: AppIconName; action: () => void }> = [
     { id: 'home', label: 'Главная', icon: 'home', action: onHome },
     { id: 'services', label: 'Услуги', icon: 'document', action: onServices },
     { id: 'history', label: 'История', icon: 'history', action: onHistory },
     { id: 'helpers', label: 'Близкие', icon: 'people', action: onHelpers },
   ];
+  const items = staffMode ? allItems.filter((item) => item.id === 'home' || item.id === 'history') : allItems;
   return <nav className="ui-tabbar" aria-label="Разделы">{items.map((item) => <button key={item.id} type="button" className={active === item.id ? 'is-active' : ''} onClick={item.action}><AppIcon name={item.icon} /><span>{item.label}</span></button>)}</nav>;
 }
 

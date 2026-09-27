@@ -650,7 +650,12 @@ def test_pointer_reaches_owner_without_a_reply(api):
             helper_ws.send_json(
                 {
                     "command": "annotation.pointer",
-                    "payload": {"element_id": "benefit_category", "rel_x": 0.42, "rel_y": 2},
+                    "payload": {
+                        "element_id": "benefit_category",
+                        "rel_x": 0.42,
+                        "rel_y": 2,
+                        "target_area": "select_options",
+                    },
                 }
             )
             pointer = owner_ws.receive_json()
@@ -663,6 +668,7 @@ def test_pointer_reaches_owner_without_a_reply(api):
         "element_id": "benefit_category",
         "rel_x": 0.42,
         "rel_y": 1.0,
+        "target_area": "select_options",
         "visible": True,
     }
     assert reply["payload"]["code"] == "unknown_command"

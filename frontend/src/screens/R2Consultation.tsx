@@ -5,7 +5,7 @@ import { consultationQuery, queryKeys } from '../api/queries';
 import { ConfirmDialog } from '../components/AppDialog';
 import { useState } from 'react';
 import { ScreenIntro } from '../components/ScreenIntro';
-import { AppIcon, formatDuration, PersonRow, Surface } from '../components/UiPrimitives';
+import { AppIcon, formatDuration, LoadingMessage, PersonRow, Surface } from '../components/UiPrimitives';
 
 export function R2Consultation({ id, onReplay }: { id: string; onReplay: () => void }) {
   const queryClient = useQueryClient();
@@ -17,7 +17,7 @@ export function R2Consultation({ id, onReplay }: { id: string; onReplay: () => v
     refetchInterval: (query) => query.state.data?.recording?.status === 'recording' ? 3000 : false,
   });
   const removeRecording = useMutation({ mutationFn: deleteConsultationRecording, onSuccess: () => { setConfirmDelete(false); void queryClient.invalidateQueries({ queryKey: queryKeys.consultation(id) }); void queryClient.invalidateQueries({ queryKey: queryKeys.replay(id) }); } });
-  if (detail.isLoading) return <Typography.Text>Загружаем консультацию…</Typography.Text>;
+  if (detail.isLoading) return <LoadingMessage>Загружаем консультацию…</LoadingMessage>;
   if (detail.error || !detail.data) return <div className="notice notice--error"><Flex direction="column" gap={8}><Typography.Text>{detail.error instanceof Error ? detail.error.message : 'Не удалось открыть консультацию'}</Typography.Text><Button size="small" onClick={() => void detail.refetch()}>Повторить</Button></Flex></div>;
   const data = detail.data;
   const helpers = data.helpers.map((item) => item.display_name).join(', ') || 'Помощник';

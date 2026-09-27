@@ -1,8 +1,8 @@
-import { Button, Typography } from '@maxhub/max-ui';
-import { useEffect, useRef } from 'react';
+import { Button, Spinner, Typography } from '@maxhub/max-ui';
+import { useEffect, useRef, useState } from 'react';
 import { useVoiceRoom, type VoiceRole } from '../realtime/useVoiceRoom';
 import { useToast } from './ToastProvider';
-import { AppIcon } from './UiPrimitives';
+import { AppIcon, LoadingMessage } from './UiPrimitives';
 
 interface VoiceControlProps {
   sessionId: string;
@@ -13,6 +13,8 @@ interface VoiceControlProps {
 export function VoiceControl({ sessionId, role, autoConnect = role === 'owner' }: VoiceControlProps) {
   const voice = useVoiceRoom({ sessionId, role, autoConnect });
   const previousRemote = useRef<string[]>([]);
+  const [microphonePending, setMicrophonePending] = useState(false);
+  const [soundPending, setSoundPending] = useState(false);
   const toast = useToast();
   const remote = voice.remoteParticipants;
   const speaking = remote.find((participant) => participant.speaking);
@@ -29,6 +31,17 @@ export function VoiceControl({ sessionId, role, autoConnect = role === 'owner' }
       ? role === 'helper' ? `${remote[0].displayName} слышит вас` : `${remote[0].displayName} вас слышит`
       : '';
 
+  const toggleMicrophone = async () => {
+    setMicrophonePending(true);
+    try { await voice.toggleMicrophone(); }
+    finally { setMicrophonePending(false); }
+  };
+  const enableSound = async () => {
+    setSoundPending(true);
+    try { await voice.enableSound(); }
+    finally { setSoundPending(false); }
+  };
+
   useEffect(() => {
     const current = remote.map((participant) => participant.identity);
     const joined = remote.find((participant) => !previousRemote.current.includes(participant.identity));
@@ -41,12 +54,13 @@ export function VoiceControl({ sessionId, role, autoConnect = role === 'owner' }
   return (
     <section className="voice-control" aria-label="Голосовой разговор">
       {role === 'helper' && voice.connection === 'idle' && <Button size="small" stretched variant="primary" onClick={() => void voice.connect()}>Начать разговор</Button>}
-      {voice.connection === 'connecting' && <Typography.Text className="muted-text">{role === 'owner' ? 'Подключаем звук…' : 'Подключаем разговор…'}</Typography.Text>}
-      {voice.connection === 'idle' && role === 'owner' && autoConnect && <Typography.Text className="muted-text">Подключаем звук…</Typography.Text>}
-      {voice.connection === 'reconnecting' && <Typography.Text className="muted-text">Восстанавливаем голосовое соединение…</Typography.Text>}
+      {role === 'helper' && voice.connection === 'connecting' && <Button size="small" stretched variant="primary" loading disabled>Подключаем разговор…</Button>}
+      {voice.connection === 'connecting' && role === 'owner' && <LoadingMessage>Подключаем звук…</LoadingMessage>}
+      {voice.connection === 'idle' && role === 'owner' && autoConnect && <LoadingMessage>Подключаем звук…</LoadingMessage>}
+      {voice.connection === 'reconnecting' && <LoadingMessage>Восстанавливаем голосовое соединение…</LoadingMessage>}
       {voice.connection === 'connected' && (
         <div className="voice-control__connected">
-          <button type="button" className={`voice-mic${voice.localMic ? ' is-on' : ''}`} aria-label={voice.localMic ? 'Выключить микрофон' : 'Включить микрофон'} title={voice.localMic ? 'Выключить микрофон' : 'Включить микрофон'} onClick={() => void voice.toggleMicrophone()}><AppIcon name="microphone" /></button>
+          <button type="button" className={`voice-mic${voice.localMic ? ' is-on' : ''}`} disabled={microphonePending} aria-label={voice.localMic ? 'Выключить микрофон' : 'Включить микрофон'} title={voice.localMic ? 'Выключить микрофон' : 'Включить микрофон'} onClick={() => void toggleMicrophone()}>{microphonePending ? <Spinner size={20} appearance="themed" /> : <AppIcon name="microphone" />}</button>
           <div className="voice-control__copy"><strong>{voice.localMic ? 'Микрофон включён' : 'Микрофон выключен'}</strong><span>{speaking ? remoteCopy : localCopy || remoteCopy}</span></div>
         </div>
       )}
@@ -55,7 +69,7 @@ export function VoiceControl({ sessionId, role, autoConnect = role === 'owner' }
       {voice.connection === 'connected' && (voice.audioPlayback === 'blocked' || voice.audioPlayback === 'error') && (
         <div className="voice-control__playback">
           <Typography.Text>{voice.audioPlayback === 'blocked' ? 'Звук помощника готов' : 'Не удалось включить звук'}</Typography.Text>
-          <Button size="small" variant="secondary" onClick={() => void voice.enableSound()}>Включить звук</Button>
+          <Button size="small" variant="secondary" loading={soundPending} disabled={soundPending} onClick={() => void enableSound()}>Включить звук</Button>
         </div>
       )}
       <div ref={voice.audioContainerRef} className="voice-audio" aria-hidden="true" />

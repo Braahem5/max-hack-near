@@ -141,9 +141,13 @@ async def pointer(
     if visible and element_id not in await elements_of_current_step(assist_id):
         return events.error(assist_id, request_id, "unknown_element", "Этого поля нет на текущем шаге")
 
+    target_area = payload.get("target_area")
+    if target_area != "select_options":
+        target_area = None
+
     await events.publish(
         assist_id,
-        events.pointer(assist_id, connection.viewer, element_id, rel_x, rel_y, visible),
+        events.pointer(assist_id, connection.viewer, element_id, rel_x, rel_y, visible, target_area),
     )
     return None
 

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ServiceSession, ServiceSummary } from '../api/client';
 import { queryKeys, queryPolicy, servicesQuery, sessionsQuery } from '../api/queries';
 import { ScreenIntro } from '../components/ScreenIntro';
-import { ListRow } from '../components/UiPrimitives';
+import { ListRow, LoadingMessage } from '../components/UiPrimitives';
 
 interface S1ServicesProps {
   onOpenService: (service: ServiceSummary, draft?: ServiceSession) => void;
@@ -17,7 +17,7 @@ export function S1Services({ onOpenService }: S1ServicesProps) {
 
   return <div className="ui-page services-screen">
     <ScreenIntro title="Услуги" description="Выберите услугу — мы проведём по заявлению шаг за шагом." />
-    {(services.isLoading || sessions.isLoading) && <Typography.Text>Загружаем услуги…</Typography.Text>}
+    {(services.isLoading || sessions.isLoading) && <LoadingMessage>Загружаем услуги…</LoadingMessage>}
     {(services.error || sessions.error) && <div className="notice notice--error" role="alert">
       <Flex direction="column" gap={8}>
         <Typography.Text>{services.error instanceof Error ? services.error.message : sessions.error instanceof Error ? sessions.error.message : 'Не удалось загрузить услуги.'}</Typography.Text>

@@ -28,6 +28,7 @@ export interface AssistPointer {
   elementId: string;
   relX: number;
   relY: number;
+  targetArea?: 'select_options';
 }
 
 export interface AssistSelectView { elementId: string; scrollTop: number; viewportHeight?: number }
@@ -259,7 +260,7 @@ export const useAssistStore = create<AssistRealtimeState>((set, get) => ({
       if (message.payload.visible === false) {
         set({ pointer: null, lastSeq: nextSeq });
       } else {
-        set({ pointer: { elementId: String(message.payload.element_id), relX: Number(message.payload.rel_x), relY: Number(message.payload.rel_y) }, lastSeq: nextSeq });
+        set({ pointer: { elementId: String(message.payload.element_id), relX: Number(message.payload.rel_x), relY: Number(message.payload.rel_y), targetArea: message.payload.target_area === 'select_options' ? 'select_options' : undefined }, lastSeq: nextSeq });
       }
       return;
     }

@@ -2,7 +2,7 @@ import { Button, Flex, Typography } from '@maxhub/max-ui';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { getConsultationRecording, getPastHelp, type PastHelpFragment } from '../api/client';
-import { AppIcon } from './UiPrimitives';
+import { AppIcon, LoadingMessage } from './UiPrimitives';
 
 export function PastHelpBanner({ serviceSessionId, stepId }: { serviceSessionId: string; stepId: string }) {
   const history = useQuery({ queryKey: ['past-help', serviceSessionId], queryFn: ({ signal }) => getPastHelp(serviceSessionId, signal), staleTime: 30_000 });
@@ -25,7 +25,7 @@ export function PastHelpBanner({ serviceSessionId, stepId }: { serviceSessionId:
     {expanded && <Flex direction="column" gap={8} className="past-help__content">
       <Typography.Label>В прошлый раз на этом шаге помогал {helper}</Typography.Label>
       <Typography.Text>{fragment.highlights ? `${fragment.highlights} подсказки сохранены для этого шага.` : 'Сохранён фрагмент прошлого объяснения.'}</Typography.Text>
-      {recordingUrl ? <audio controls preload="metadata" src={recordingUrl} /> : <Typography.Text className="muted-text">{recording.isLoading ? 'Загружаем аудиозапись…' : 'Аудиозапись недоступна'}</Typography.Text>}
+      {recordingUrl ? <audio controls preload="metadata" src={recordingUrl} /> : recording.isLoading ? <LoadingMessage>Загружаем аудиозапись…</LoadingMessage> : <Typography.Text className="muted-text">Аудиозапись недоступна</Typography.Text>}
     </Flex>}
   </section>;
 }

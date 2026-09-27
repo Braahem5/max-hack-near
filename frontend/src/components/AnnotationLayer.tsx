@@ -65,7 +65,10 @@ export function AnnotationLayer({ annotations, pointer, autoScroll = false }: { 
     return rect ? [{ ...annotation, left: rect.left, top: rect.top, width: rect.width, height: rect.height }] : [];
   });
   const pointerPosition = pointer && (() => {
-    const rect = targetFor(pointer.elementId)?.getBoundingClientRect();
+    const field = targetFor(pointer.elementId);
+    const rect = pointer.targetArea === 'select_options'
+      ? field?.querySelector<HTMLElement>('.synced-select__options')?.getBoundingClientRect()
+      : field?.getBoundingClientRect();
     return rect ? { left: rect.left + rect.width * pointer.relX, top: rect.top + rect.height * pointer.relY } : null;
   })();
 

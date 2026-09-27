@@ -18,7 +18,7 @@ import { VoiceControl } from '../components/VoiceControl';
 import { PastHelpBanner } from '../components/PastHelpBanner';
 import { AppDialog, ConfirmDialog } from '../components/AppDialog';
 import { InlineAction } from '../components/InlineAction';
-import { AppIcon, PersonRow } from '../components/UiPrimitives';
+import { AppIcon, LoadingMessage, PersonRow } from '../components/UiPrimitives';
 
 type SaveState = 'saved' | 'saving' | 'error';
 
@@ -31,11 +31,13 @@ interface S3FormProps {
   assist?: { id: string; status: string; helpers: number; connection: string; recording: boolean; digitalEmployee: boolean } | null;
   onNeedHelp: () => void;
   onOpenWaiting: () => void;
-  onEndAssist?: () => void;
-  onReleaseDigitalEmployee?: () => void;
+  onEndAssist?: () => Promise<boolean>;
+  onReleaseDigitalEmployee?: () => Promise<boolean>;
+  endPending?: boolean;
+  releasePending?: boolean;
 }
 
-export function S3Form({ definition, initialSession, onRegisterBack, onSessionChange, onConfirmation, assist, onNeedHelp, onOpenWaiting, onEndAssist, onReleaseDigitalEmployee }: S3FormProps) {
+export function S3Form({ definition, initialSession, onRegisterBack, onSessionChange, onConfirmation, assist, onNeedHelp, onOpenWaiting, onEndAssist, onReleaseDigitalEmployee, endPending = false, releasePending = false }: S3FormProps) {
   const queryClient = useQueryClient();
   const [session, setSession] = useState(initialSession);
   const [values, setValues] = useState(initialSession.values);
@@ -44,6 +46,7 @@ export function S3Form({ definition, initialSession, onRegisterBack, onSessionCh
   const [showConfusionOptions, setShowConfusionOptions] = useState(false);
   const [confirmReleaseAgent, setConfirmReleaseAgent] = useState(false);
   const [confirmEndAssist, setConfirmEndAssist] = useState(false);
+  const [navigating, setNavigating] = useState(false);
   const pendingValues = useRef<Record<string, unknown>>({});
   const timer = useRef<number | undefined>(undefined);
   const sessionRef = useRef(initialSession);
@@ -127,16 +130,25 @@ export function S3Form({ definition, initialSession, onRegisterBack, onSessionCh
     return condition.in ? condition.in.includes(value) : value === condition.equals;
   }) ?? [];
 
+  async function releaseAgent() {
+    if (await onReleaseDigitalEmployee?.()) setConfirmReleaseAgent(false);
+  }
+
+  async function endAssist() {
+    if (await onEndAssist?.()) setConfirmEndAssist(false);
+  }
+
   async function navigate(action: 'next' | 'back') {
     setActionError('');
-    if (!(await flush())) return;
+    setNavigating(true);
     try {
+      if (!(await flush())) return;
       const next = await navigateFields({ action });
       applySession(next);
       if (next.current_step.id === 'confirmation') onConfirmation(next);
     } catch (reason) {
       setActionError(reason instanceof Error ? reason.message : 'Не удалось перейти к следующему шагу');
-    }
+    } finally { setNavigating(false); }
   }
 
   useEffect(() => {
@@ -198,15 +210,13 @@ export function S3Form({ definition, initialSession, onRegisterBack, onSessionCh
         syncSelects={assist?.status === 'active'}
       />
 
-      <Typography.Text className="save-state">
-        {saveState === 'saving' ? 'Сохраняем…' : saveState === 'error' ? 'Изменения не сохранены' : 'Сохранено'}
-      </Typography.Text>
+      {saveState === 'saving' ? <LoadingMessage className="save-state">Сохраняем…</LoadingMessage> : <Typography.Text className="save-state">{saveState === 'error' ? 'Изменения не сохранены' : 'Сохранено'}</Typography.Text>}
 
       <Flex gap={8} className="form-actions form-actions--single">
-        <Button size="small" stretched onClick={() => void navigate('next')}>Далее</Button>
+        <Button size="small" stretched loading={navigating} disabled={navigating} onClick={() => void navigate('next')}>Далее</Button>
       </Flex>
-      {confirmReleaseAgent && <ConfirmDialog title="Отпустить цифрового сотрудника?" description="Он выйдет из встречи и перестанет слушать вопрос. Позвать снова можно позже." confirmLabel="Отпустить" destructive onCancel={() => setConfirmReleaseAgent(false)} onConfirm={() => { setConfirmReleaseAgent(false); onReleaseDigitalEmployee?.(); }} />}
-      {confirmEndAssist && <ConfirmDialog title="Завершить помощь?" description="Помощники отключатся от заявления и разговора." confirmLabel="Завершить" destructive onCancel={() => setConfirmEndAssist(false)} onConfirm={() => { setConfirmEndAssist(false); onEndAssist?.(); }} />}
+      {confirmReleaseAgent && <ConfirmDialog title="Отпустить цифрового сотрудника?" description="Он выйдет из встречи и перестанет слушать вопрос. Позвать снова можно позже." confirmLabel="Отпустить" pending={releasePending} destructive onCancel={() => setConfirmReleaseAgent(false)} onConfirm={() => void releaseAgent()} />}
+      {confirmEndAssist && <ConfirmDialog title="Завершить помощь?" description="Помощники отключатся от заявления и разговора." confirmLabel="Завершить" pending={endPending} destructive onCancel={() => setConfirmEndAssist(false)} onConfirm={() => void endAssist()} />}
       {assist?.status === 'active' && snapshot && <AnnotationLayer annotations={snapshot.annotations} pointer={pointer} autoScroll />}
     </Flex>
   );

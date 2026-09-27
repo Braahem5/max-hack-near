@@ -478,11 +478,15 @@ def pointer(
     rel_x: float,
     rel_y: float,
     visible: bool,
+    target_area: str | None = None,
 ) -> list[Delivery]:
+    payload: dict[str, Any] = {"element_id": element_id, "rel_x": rel_x, "rel_y": rel_y, "visible": visible}
+    if target_area == "select_options":
+        payload["target_area"] = target_area
     message = envelope(
         assist_id,
         "annotation.pointer",
-        {"element_id": element_id, "rel_x": rel_x, "rel_y": rel_y, "visible": visible},
+        payload,
         actor=actor_of_viewer(viewer),
     )
     return [Delivery(hub.active_participants(assist_id, exclude=viewer.participant_id), message)]

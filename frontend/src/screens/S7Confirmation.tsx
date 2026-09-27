@@ -13,7 +13,7 @@ import { cacheSession, demoInboxQuery, queryKeys } from '../api/queries';
 import { setScreenCaptureProtection } from '../platform/maxBridge';
 import { ScreenIntro } from '../components/ScreenIntro';
 import { useToast } from '../components/ToastProvider';
-import { AppIcon, AppInput } from '../components/UiPrimitives';
+import { AppIcon, AppInput, LoadingMessage } from '../components/UiPrimitives';
 
 interface S7ConfirmationProps {
   session: ServiceSession;
@@ -34,7 +34,7 @@ export function S7Confirmation({ session, onRegisterBack, onBack, onSubmitted }:
     queryFn: demoInboxQuery,
     retry: false,
   });
-  const { mutateAsync: issueCode } = useMutation({ mutationFn: issueConfirmationCode });
+  const { mutateAsync: issueCode, isPending: isIssuingCode } = useMutation({ mutationFn: issueConfirmationCode });
   const { mutateAsync: navigateBack, isPending: isNavigatingBack } = useMutation({
     mutationFn: () => navigateService(session.id, 'back'),
     onSuccess: (next) => cacheSession(queryClient, next),
@@ -112,6 +112,7 @@ export function S7Confirmation({ session, onRegisterBack, onBack, onSubmitted }:
       </div>
       {messages.length > 0 && <Button size="small" variant="ghost" onClick={() => toast(messages.at(-1)?.text ?? '')}>Показать демо-SMS</Button>}
       {(error || inbox.error) && <div className="notice notice--error">{error || (inbox.error instanceof Error ? inbox.error.message : 'Не удалось получить код')}</div>}
+      {(inbox.isLoading || isIssuingCode) && <LoadingMessage>Получаем код подтверждения…</LoadingMessage>}
       <label className="input-field">
         <span>Код из SMS</span>
         <AppInput
@@ -124,7 +125,7 @@ export function S7Confirmation({ session, onRegisterBack, onBack, onSubmitted }:
         />
       </label>
       <Flex gap={12} className="form-actions form-actions--single">
-        <Button size="small" stretched disabled={busy || code.length !== 4} onClick={() => void sendApplication()}>
+        <Button size="small" stretched loading={isSubmitting} disabled={busy || code.length !== 4} onClick={() => void sendApplication()}>
           Отправить заявление
         </Button>
       </Flex>

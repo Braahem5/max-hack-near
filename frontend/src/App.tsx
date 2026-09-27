@@ -35,7 +35,7 @@ import { getDisplayNameHint, getInitData, getStartParam, isMaxRuntime } from './
 import { parseStartParam, type LaunchIntent } from './platform/startParam';
 import { useAssistStore } from './realtime/assistStore';
 import { useAssistSocket } from './realtime/useAssistSocket';
-import { BottomNav } from './components/UiPrimitives';
+import { BottomNav, LoadingMessage } from './components/UiPrimitives';
 
 type AppMode = 'loading' | 'dev' | 'home' | 'services' | 'operator-queue' | 'trusted-helpers' | 'helping-for' | 'pairing-invite' | 'consultations' | 'consultation-detail' | 'replay' | 'service' | 'form' | 'confirmation' | 'submitted' | 'help-options' | 'waiting' | 'helper-invite' | 'helper-busy' | 'helper-ready' | 'helper-pending' | 'helper-active' | 'assist-busy' | 'assist-ended' | 'error';
 
@@ -62,6 +62,10 @@ export default function App() {
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
+  const [pendingHelpAction, setPendingHelpAction] = useState<string | null>(null);
+  const [acceptingInvite, setAcceptingInvite] = useState(false);
+  const [endingAssist, setEndingAssist] = useState(false);
+  const [releasingAgent, setReleasingAgent] = useState(false);
   const [inviteReady, setInviteReady] = useState<AssistInvite | null>(null);
   const [consentRequired, setConsentRequired] = useState(false);
   const [assistError, setAssistError] = useState('');
@@ -197,6 +201,7 @@ export default function App() {
   }
   async function createAndShare() {
     if (!draft) return;
+    setPendingHelpAction('link');
     setAssistError('');
     try {
       if (consentRequired && consent) await agreeToRecording();
@@ -210,10 +215,11 @@ export default function App() {
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === 'recording_consent_required') { setConsentRequired(true); setAssistError('Перед приглашением подтвердите согласие на запись разговора.'); }
       else setAssistError(reason instanceof Error ? reason.message : 'Не удалось подготовить приглашение.');
-    }
+    } finally { setPendingHelpAction(null); }
   }
   async function callTrusted(trustedHelperId: string) {
     if (!draft) return;
+    setPendingHelpAction(`trusted:${trustedHelperId}`);
     setAssistError('');
     try {
       if (consentRequired && consent) await agreeToRecording();
@@ -225,16 +231,19 @@ export default function App() {
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === 'recording_consent_required') { setConsentRequired(true); setAssistError('Перед приглашением подтвердите согласие на запись.'); }
       else setAssistError(reason instanceof Error ? reason.message : 'Не удалось позвать близкого.');
-    }
+    } finally { setPendingHelpAction(null); }
   }
   async function shareAgain() {
     if (!assist) return;
+    setPendingHelpAction('share_again');
     setAssistError('');
     try { const invite = await createAssistInvite(assist.id); setInviteReady(invite); }
     catch (reason) { setAssistError(reason instanceof Error ? reason.message : 'Не удалось отправить ссылку.'); }
+    finally { setPendingHelpAction(null); }
   }
   async function requestOperator(topic: 'dont_understand' | 'form_error' | 'other') {
     if (!draft) return;
+    setPendingHelpAction(`operator:${topic}`);
     setAssistError('');
     try {
       if (consentRequired && consent) await agreeToRecording();
@@ -245,10 +254,11 @@ export default function App() {
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === 'recording_consent_required') { setConsentRequired(true); setAssistError('Перед подключением специалиста подтвердите согласие на запись.'); }
       else setAssistError(reason instanceof Error ? reason.message : 'Не удалось вызвать специалиста.');
-    }
+    } finally { setPendingHelpAction(null); }
   }
   async function callAgent() {
     if (!draft) return;
+    setPendingHelpAction('digital');
     setAssistError('');
     try {
       if (consentRequired && consent) await agreeToRecording();
@@ -257,18 +267,27 @@ export default function App() {
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === 'recording_consent_required') { setConsentRequired(true); setAssistError('Перед разговором подтвердите согласие на запись.'); }
       else setAssistError(reason instanceof Error ? reason.message : 'Цифровой сотрудник недоступен. Позовите близкого или сотрудника МФЦ.');
-    }
+    } finally { setPendingHelpAction(null); }
   }
-  async function releaseAgent() { if (!assist) return; try { await releaseDigitalEmployee(assist.id); } catch (reason) { setAssistError(reason instanceof Error ? reason.message : 'Не удалось отпустить цифрового сотрудника.'); } }
-  async function finishAssist() {
-    if (!assist) return;
+  async function releaseAgent(): Promise<boolean> {
+    if (!assist) return false;
+    setReleasingAgent(true);
+    try { await releaseDigitalEmployee(assist.id); return true; }
+    catch (reason) { setAssistError(reason instanceof Error ? reason.message : 'Не удалось отпустить цифрового сотрудника.'); return false; }
+    finally { setReleasingAgent(false); }
+  }
+  async function finishAssist(): Promise<boolean> {
+    if (!assist) return false;
+    setEndingAssist(true);
     try {
       await endAssistSession(assist.id);
       await queryClient.invalidateQueries({ queryKey: queryKeys.activeAssists() });
       await queryClient.invalidateQueries({ queryKey: queryKeys.assist(assist.id) });
       setMode('assist-ended');
+      return true;
     }
-    catch (reason) { setAssistError(reason instanceof Error ? reason.message : 'Не удалось завершить помощь.'); }
+    catch (reason) { setAssistError(reason instanceof Error ? reason.message : 'Не удалось завершить помощь.'); return false; }
+    finally { setEndingAssist(false); }
   }
   async function openHistory() {
     setBackAction(null);
@@ -299,6 +318,7 @@ export default function App() {
   }
   async function acceptInvite() {
     if (!inviteToken) return;
+    setAcceptingInvite(true);
     setAssistError('');
     try {
       if (consentRequired && consent) await agreeToRecording();
@@ -308,7 +328,7 @@ export default function App() {
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === 'recording_consent_required') { setConsentRequired(true); setAssistError('Перед подключением подтвердите согласие на запись разговора.'); }
       else setAssistError(reason instanceof Error ? reason.message : 'Не удалось подключиться.');
-    }
+    } finally { setAcceptingInvite(false); }
   }
   async function leaveAssist() {
     if (!assist) return;
@@ -341,6 +361,7 @@ export default function App() {
     consultations: 'История помощи', 'consultation-detail': 'Встреча', replay: 'Встреча', 'operator-queue': 'Очередь обращений', 'assist-ended': 'Итоги встречи',
   };
   const hideShellHeader = mode === 'home' || mode === 'helper-active' || mode === 'submitted' || mode === 'assist-busy';
+  const localStaffMode = import.meta.env.DEV && Boolean(user.staff);
   const bottomNav = mode === 'home' ? 'home' : mode === 'services' ? 'services' : mode === 'consultations' ? 'history' : mode === 'trusted-helpers' || mode === 'helping-for' ? 'helpers' : null;
 
   return <AppShell onBack={shellBack} title={shellTitle[mode] ?? 'Рядом'} hideHeader={hideShellHeader}>
@@ -350,22 +371,22 @@ export default function App() {
     {mode === 'trusted-helpers' && <T1TrustedHelpers />}
     {mode === 'helping-for' && <T5HelpingFor onOpen={(id) => { setAssist({ id } as AssistSession); setMode('helper-active'); }} onPairing={(token) => { setInviteToken(token); setMode('pairing-invite'); }} />}
     {mode === 'pairing-invite' && inviteToken && <T4PairingInvite token={inviteToken} onHome={backToHome} />}
-    {mode === 'consultations' && <R1Consultations as="owner" onOpen={(id) => { setHistoryId(id); setMode('consultation-detail'); }} />}
+    {mode === 'consultations' && <R1Consultations as={localStaffMode ? 'helper' : 'owner'} staffMode={localStaffMode} onOpen={(id) => { setHistoryId(id); setMode('consultation-detail'); }} />}
     {mode === 'consultation-detail' && historyId && <R2Consultation id={historyId} onReplay={() => setMode('replay')} />}
     {mode === 'replay' && historyId && <R3Replay id={historyId} />}
     {mode === 'operator-queue' && <O1OperatorQueue onClaim={(id) => { setAssist({ id } as AssistSession); setMode('helper-active'); }} />}
-    {mode === 'service' && definition && <S2ServiceCard service={definition} draft={draft} onStart={() => void beginService()} />}
-    {mode === 'form' && definition && draft && <S3Form definition={definition} initialSession={draft} onRegisterBack={registerFormBack} onSessionChange={setDraft} onConfirmation={(next) => { setDraft(next); setMode('confirmation'); }} assist={assist ? { id: assist.id, status: realtime.snapshot?.session.status === 'active' || assist.status === 'active' ? 'active' : realtime.snapshot?.session.status ?? assist.status, helpers: realtime.snapshot?.session.participants.filter((item) => item.role !== 'owner' && item.status === 'active').length ?? 0, connection: realtime.connection, recording: realtime.snapshot?.session.recording?.status === 'recording', digitalEmployee: Boolean(realtime.snapshot?.session.participants.some((item) => item.role === 'ai_agent')) } : null} onNeedHelp={() => { setConsent(false); setConsentRequired(false); setAssistError(''); setMode('help-options'); }} onOpenWaiting={() => setMode('waiting')} onEndAssist={() => void finishAssist()} onReleaseDigitalEmployee={() => void releaseAgent()} />}
-    {mode === 'help-options' && <S4HelpOptions consentRequired={consentRequired} consent={consent} busy={createAssist.isPending} error={assistError} onConsentChange={setConsent} onSendLink={() => void createAndShare()} onCallTrusted={(id) => void callTrusted(id)} onRequestOperator={(topic) => void requestOperator(topic)} onCallDigitalEmployee={() => void callAgent()} onClose={() => setMode('form')} />}
-    {mode === 'waiting' && assist && <S5Waiting session={assist} connection={realtime.connection} operatorRequest={realtime.snapshot?.operator_request} onShareAgain={() => void shareAgain()} onContinue={() => setMode('form')} onEnd={() => void finishAssist()} />}
+    {mode === 'service' && definition && <S2ServiceCard service={definition} draft={draft} busy={startSession.isPending} onStart={() => void beginService()} />}
+    {mode === 'form' && definition && draft && <S3Form definition={definition} initialSession={draft} onRegisterBack={registerFormBack} onSessionChange={setDraft} onConfirmation={(next) => { setDraft(next); setMode('confirmation'); }} assist={assist ? { id: assist.id, status: realtime.snapshot?.session.status === 'active' || assist.status === 'active' ? 'active' : realtime.snapshot?.session.status ?? assist.status, helpers: realtime.snapshot?.session.participants.filter((item) => item.role !== 'owner' && item.status === 'active').length ?? 0, connection: realtime.connection, recording: realtime.snapshot?.session.recording?.status === 'recording', digitalEmployee: Boolean(realtime.snapshot?.session.participants.some((item) => item.role === 'ai_agent')) } : null} onNeedHelp={() => { setConsent(false); setConsentRequired(false); setAssistError(''); setMode('help-options'); }} onOpenWaiting={() => setMode('waiting')} onEndAssist={finishAssist} onReleaseDigitalEmployee={releaseAgent} endPending={endingAssist} releasePending={releasingAgent} />}
+    {mode === 'help-options' && <S4HelpOptions consentRequired={consentRequired} consent={consent} busy={pendingHelpAction !== null || createAssist.isPending} pendingAction={pendingHelpAction} error={assistError} onConsentChange={setConsent} onSendLink={() => void createAndShare()} onCallTrusted={(id) => void callTrusted(id)} onRequestOperator={(topic) => void requestOperator(topic)} onCallDigitalEmployee={() => void callAgent()} onClose={() => setMode('form')} />}
+    {mode === 'waiting' && assist && <S5Waiting session={assist} connection={realtime.connection} operatorRequest={realtime.snapshot?.operator_request} sharing={pendingHelpAction === 'share_again'} ending={endingAssist} onShareAgain={() => void shareAgain()} onContinue={() => setMode('form')} onEnd={() => void finishAssist()} />}
     {mode === 'confirmation' && draft && <S7Confirmation session={draft} onRegisterBack={registerConfirmationBack} onBack={(next) => { setDraft(next); setMode('form'); }} onSubmitted={(next) => { setResult(next); setMode('submitted'); }} />}
     {mode === 'submitted' && result && <S8Submitted result={result} onHome={backToHome} />}
-    {mode === 'helper-invite' && inviteToken && <H1Invite token={inviteToken} consentRequired={consentRequired} consent={consent} busy={false} error={assistError} onConsentChange={setConsent} onAccept={() => void acceptInvite()} onBusy={() => setMode('helper-busy')} onHome={backToHome} onOwnerSession={(id) => { void openActiveAssist(id); }} />}
+    {mode === 'helper-invite' && inviteToken && <H1Invite token={inviteToken} consentRequired={consentRequired} consent={consent} busy={acceptingInvite} error={assistError} onConsentChange={setConsent} onAccept={() => void acceptInvite()} onBusy={() => setMode('helper-busy')} onHome={backToHome} onOwnerSession={(id) => { void openActiveAssist(id); }} />}
     {mode === 'helper-busy' && inviteToken && <H5Busy token={inviteToken} onReady={(id) => { setInviteToken(id); setMode('helper-ready'); }} onHome={backToHome} />}
     {mode === 'helper-ready' && inviteToken && <H6Ready callbackId={inviteToken} onHome={backToHome} />}
     {mode === 'helper-pending' && <H2Pending error={realtime.error || assistError} rejected={realtime.rejected} connection={realtime.connection} onHome={backToHome} />}
     {mode === 'helper-active' && helperSnapshot && <H3Helper snapshot={helperSnapshot} connection={realtime.connection} onLeave={() => void leaveAssist()} />}
-    {mode === 'helper-active' && !helperSnapshot && <Flex direction="column" gap={12}><Typography.Title>Подключаем помощь</Typography.Title>{helperState.isLoading && <Typography.Text>Загружаем текущий шаг…</Typography.Text>}{(helperState.error || realtime.error) && <div className="notice notice--error"><Typography.Text>{helperState.error instanceof Error ? helperState.error.message : realtime.error || 'Не удалось открыть консультацию.'}</Typography.Text><Button size="small" onClick={() => void helperState.refetch()}>Повторить</Button></div>}</Flex>}
+    {mode === 'helper-active' && !helperSnapshot && <Flex direction="column" gap={12}><Typography.Title>Подключаем помощь</Typography.Title>{helperState.isLoading && <LoadingMessage>Загружаем текущий шаг…</LoadingMessage>}{(helperState.error || realtime.error) && <div className="notice notice--error"><Typography.Text>{helperState.error instanceof Error ? helperState.error.message : realtime.error || 'Не удалось открыть консультацию.'}</Typography.Text><Button size="small" onClick={() => void helperState.refetch()}>Повторить</Button></div>}</Flex>}
     {mode === 'assist-ended' && assist && <S9Ended sessionId={assist.id} owner={Boolean(realtime.snapshot?.session.me.role === 'owner' || draft)} onContinue={continueAfterAssist} onHome={backToHome} onHistory={() => void openHistory()} />}
     {mode === 'assist-busy' && <S10HelperBusy onSave={() => { void finishAssist().finally(backToHome); }} onOther={() => setMode('help-options')} />}
     {realtime.joinRequest && assist && <S6ApproveHelper helper={realtime.joinRequest} busy={approvalBusy} error={assistError} onApprove={() => void approveJoin(true)} onReject={() => void approveJoin(false)} />}
@@ -373,6 +394,6 @@ export default function App() {
     {backAction === 'helper' && <ConfirmDialog title="Выйти из помощи?" description="Вы перестанете видеть заявление и участвовать в разговоре." confirmLabel="Выйти" destructive onCancel={() => setBackAction(null)} onConfirm={() => void leaveAssist()} />}
     {backAction === 'owner' && <ConfirmDialog title="Вернуться на главную?" description="Активная помощь не завершится. Её можно будет открыть снова в разделе «Активная помощь»." confirmLabel="Вернуться" onCancel={() => setBackAction(null)} onConfirm={backToHome} />}
     </div>
-    {bottomNav && <BottomNav active={bottomNav} onHome={backToHome} onServices={() => setMode('services')} onHistory={() => void openHistory()} onHelpers={() => setMode('trusted-helpers')} />}
+    {bottomNav && <BottomNav active={bottomNav} staffMode={localStaffMode} onHome={backToHome} onServices={() => setMode('services')} onHistory={() => void openHistory()} onHelpers={() => setMode('trusted-helpers')} />}
   </AppShell>;
 }

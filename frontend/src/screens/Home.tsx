@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Flex, Typography } from "@maxhub/max-ui";
+import { Button, Flex, Switch, Typography } from "@maxhub/max-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ActiveAssist,
@@ -9,6 +9,7 @@ import type {
 } from "../api/client";
 import {
   callHelpCallback,
+  agreeToRecording,
   deleteServiceSession,
   dismissHelpCallback,
   markHelpCallbackReady,
@@ -21,17 +22,19 @@ import {
   callbacksQuery,
   queryKeys,
   queryPolicy,
+  meQuery,
   removeCachedSession,
   servicesQuery,
   sessionsQuery,
 } from "../api/queries";
 import { launchIntentLabel, type LaunchIntent } from "../platform/startParam";
-import { SectionHeading, StatusMark } from "../components/ScreenIntro";
+import { ScreenIntro, SectionHeading, StatusMark } from "../components/ScreenIntro";
 import { ConfirmDialog } from "../components/AppDialog";
 import {
   AppIcon,
   IconButton,
   ListRow,
+  LoadingMessage,
   PersonRow,
   Surface,
 } from "../components/UiPrimitives";
@@ -58,7 +61,7 @@ function sessionStatus(session: ServiceSession): string {
   return `Черновик · шаг ${session.current_step.index} из ${session.total_steps}`;
 }
 
-export function Home({
+function CitizenHome({
   user,
   launchIntent,
   onOpenServices,
@@ -227,6 +230,7 @@ export function Home({
             {callback.status === "ready" ? (
               <Button
                 size="small"
+                loading={callCallback.isPending && callCallback.variables === callback.id}
                 disabled={callCallback.isPending}
                 onClick={() => callCallback.mutate(callback.id)}
               >
@@ -237,6 +241,7 @@ export function Home({
             )}
             <Button
               size="small"
+              loading={dismissCallback.isPending && dismissCallback.variables === callback.id}
               variant="destructive"
               disabled={dismissCallback.isPending}
               onClick={() => dismissCallback.mutate(callback.id)}
@@ -258,6 +263,7 @@ export function Home({
             <Button
               size="small"
               stretched
+              loading={readyCallback.isPending && readyCallback.variables === callback.id}
               disabled={readyCallback.isPending}
               onClick={() => readyCallback.mutate(callback.id)}
             >
@@ -286,7 +292,7 @@ export function Home({
       )}
 
       {(services.isLoading || sessions.isLoading) && (
-        <Typography.Text>Загружаем услуги…</Typography.Text>
+        <LoadingMessage>Загружаем услуги…</LoadingMessage>
       )}
       {sessions.data?.some((item) => item.status === "draft") && (
         <section className="home-section">
@@ -420,4 +426,64 @@ export function Home({
       )}
     </div>
   );
+}
+
+function StaffHome({
+  user,
+  onOpenOperatorQueue,
+  onOpenHistory,
+}: Pick<HomeProps, "user" | "onOpenOperatorQueue" | "onOpenHistory">) {
+  const queryClient = useQueryClient();
+  const me = useQuery({ queryKey: queryKeys.me(), queryFn: meQuery });
+  const consent = useMutation({
+    mutationFn: agreeToRecording,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.me() }),
+  });
+
+  return (
+    <div className="ui-page home-page staff-home">
+      <header className="home-heading">
+        <div>
+          <div className="home-heading__brand">Рядом</div>
+          <div className="home-heading__subtitle">Кабинет сотрудника МФЦ</div>
+        </div>
+        <PersonRow name={user.display_name} photoUrl={user.photo_url} initials={user.display_name.slice(0, 1)} tone="blue" />
+      </header>
+
+      <ScreenIntro title="Рабочее место" description="Очередь обращений и история вашей помощи." />
+
+      <label className="switch-field recording-consent staff-recording-consent">
+        <span>
+          <strong>Согласен на запись</strong>
+          <small>Разговоры с посетителями записываются, чтобы к ним можно было вернуться.</small>
+        </span>
+        <Switch
+          checked={Boolean(me.data?.recording_consent)}
+          disabled={me.isLoading || me.isError || me.data?.recording_consent || consent.isPending}
+          onChange={(event) => {
+            if (event.target.checked) consent.mutate();
+          }}
+        />
+      </label>
+      {me.isLoading && <LoadingMessage>Проверяем согласие на запись…</LoadingMessage>}
+      {consent.isPending && <LoadingMessage>Сохраняем согласие…</LoadingMessage>}
+      {me.error && <div className="notice notice--error">{me.error instanceof Error ? me.error.message : "Не удалось загрузить согласие на запись."}</div>}
+      {consent.error && <div className="notice notice--error">{consent.error instanceof Error ? consent.error.message : "Не удалось сохранить согласие."}</div>}
+
+      <section className="home-section">
+        <SectionHeading title="Работа" />
+        <div className="ui-list">
+          <ListRow icon="headset" iconTone="purple" title="Очередь обращений" subtitle="Подключиться к посетителю МФЦ" onClick={onOpenOperatorQueue} />
+          <ListRow icon="history" iconTone="green" title="История помощи" onClick={onOpenHistory} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function Home(props: HomeProps) {
+  if (import.meta.env.DEV && props.user.staff) {
+    return <StaffHome {...props} />;
+  }
+  return <CitizenHome {...props} />;
 }
