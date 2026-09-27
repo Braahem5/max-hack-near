@@ -39,7 +39,9 @@ DEV_USERS = {
 
 
 # сотрудники МФЦ, которые входят через MAX: ключ — id пользователя в MAX
-MFC_STAFF: dict[int, dict[str, str]] = {}
+MFC_STAFF: dict[int, dict[str, str]] = {
+    89369406: {"organization": "МФЦ Фрунзенского района", "position": "Главный специалист"},
+}
 
 
 async def login_with_max(session: AsyncSession, init_data: str) -> User:
