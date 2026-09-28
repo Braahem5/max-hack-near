@@ -302,3 +302,7 @@ npm run build
 ```
 
 Цифровой сотрудник — [agent/README.md](agent/README.md).
+
+## Лицензия
+
+MIT, см. [LICENSE](LICENSE).
